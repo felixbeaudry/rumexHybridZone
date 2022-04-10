@@ -1,31 +1,50 @@
+#hybridZoneAnalyses by Felix Beaudry, April 10th 2022
+
 ####packages####
-library(data.table) #fread()
-library(rgdal) #readOGR()
-library(dismo) #getData() library(maptools)
+library(data.table) #fread() #v1.14.2
 
-library(ggplot2)
-library(ggrepel)
-library(ggExtra)
-#source("~/Google Drive/Research/Scripts/multiplot_fnc.R") #multiplot
+library(dplyr) #left_join() #v.1.0.7
+library(sqldf) #v. 0.4-11
 
-library(plotrix) #FUN=std.error
-library(sqldf)
+#plotting maps
+library(rgdal) #readOGR() #v.1.5-30
+library(ggplot2) #v.3.3.5
+library(ggExtra) #ggmarginal
+library(sf) #st_read() #v.1.0-7
+library(cowplot) #plot_grid()
 
 library(FactoMineR) #PCA
+
 library(HIest)
-
-library(elevatr) #get elevation
-
-library(plyr)
-library(dplyr)
-library(tidyr) #separate
-
 library(hzar)
+
 if(require(doMC)){  ## If you have doMC, use foreach in parallel mode to speed up computation.
   registerDoMC()
 } else {## Use foreach in sequential mode
   registerDoSEQ();
 }
+
+sessionInfo()
+
+#
+'%ni%' <- Negate('%in%')
+today<-format(Sys.Date(),format="%y%m%d")
+
+
+###
+
+library(dismo) #getData() library(maptools)
+
+library(ggrepel)
+#source("~/Google Drive/Research/Scripts/multiplot_fnc.R") #multiplot
+
+library(plotrix) #FUN=std.error
+
+
+library(plyr)
+library(tidyr) #separate
+
+
 library(geosphere) #distm
 
 library(corrplot)
@@ -49,7 +68,6 @@ library(rEEMSplots) #fail
 library(rworldmap)
 library(rworldxtra)
 
-library(cowplot)
 
 library(qualV)
 require(splines)
@@ -71,64 +89,33 @@ na.test <-  function (x) {
 
 library("viridis") 
 
-library(sf)
 library(corrplot)
 
 library(ape)
 
-sessionInfo()
-'%ni%' <- Negate('%in%')
-today<-format(Sys.Date(),format="%y%m%d")
 
 
 ####file intake####
-setwd('~/Google Drive/Research/Data2/RumexhybridGenome/')
+#setwd('~/Google Drive/Research/Data2/RumexhybridGenome/')
+#setwd('~/Documents/GitHub/rumexHybridZone/')
 
+#set Minor Allele Frequency (MAF)
 maf="01"
 
-#add altitude
-#pop_pos <- fread('pickupPops_hyb_round.txt')
-#location <-  cbind.data.frame("decimalLongitude"=pop_pos$Longitude,"decimalLatitude"=pop_pos$Latitude)
-#projection_none <- "+proj=longlat +datum=WGS84"
-#space <- SpatialPoints(location, proj4string = CRS(projection_none))
-#alt <- get_elev_point(space)
-#pop_pos <- cbind.data.frame(pop_pos,"elevation"=alt$elevation)
-#write.table(pop_pos, file = "pickupPops_hyb_round_elev.txt", append = FALSE, quote = FALSE, sep = "\t",  eol = "\n", na = "NA", dec = ".", row.names = FALSE,  col.names = TRUE, qmethod = c("escape", "double"))
+pop_pos <- fread('data/pickupPops_hyb_round.txt')
 
-pop_pos <- fread('pickupPops_hyb_round_elev.txt')
-#length(pop_pos$Pop[pop_pos$Collec == "New"])
-#length(pop_pos$Pop[pop_pos$Collec == "Old"])
-
-#length(pop_pos_gen$Pop[pop_pos_gen$Collec == "New"])
-
-pop_pos_n <- pop_pos[pop_pos$Collec == "New",c(4,8)]
-pop_pos_o <- pop_pos[pop_pos$Collec == "Old",c(8,8)]
-names(pop_pos_n) <- c("mixName","Name")
-names(pop_pos_o) <- c("mixName","Name")
-
-mixname <- rbind.data.frame(pop_pos_n,pop_pos_o)
-pop_pos <- left_join(pop_pos,mixname,by=c("Name"="Name"))
 
 #inds
-indInfo <- fread('HiC_hyb.indv.txt')
+indInfo <- fread('data/HiC_hyb.indv.txt')
 indInfo$flower[indInfo$flower == "U"] <- "Inc"
 indPopInfo <- sqldf('select indInfo.*, pop_pos.*   from indInfo left join pop_pos on indInfo.statePop = pop_pos.Name')
 indPopInfo <- indPopInfo[,c(1:8,11:13,15,16)]
-inds <- fread(paste("GBS.mis60.maf",maf,".012.indv",sep=""),header=FALSE)
-#length(indPopInfo$name[indPopInfo$Collec == "New"])
-#length(indPopInfo$name[indPopInfo$Collec == "Old"])
-#length(indPopInfo$name)
 
-
+inds <- fread(paste("data/GBS.mis60.maf",maf,".012.indv",sep=""),header=FALSE)
 indsInfo <- sqldf('select inds.*, indPopInfo.* from inds left join indPopInfo on inds.V1 = indPopInfo.name')
 indsInfo$Type = factor(indsInfo$Type, levels=c('XY','Hybrid','XYY'))
 
-
-#write.table(indsInfo$name[indsInfo$hybrid_cat %in% c("XY","Hybrid_W")], file = "GBS.XY.inds", append = FALSE, quote = FALSE, sep = "\t",  eol = "\n", na = "NA", dec = ".", row.names = FALSE,    col.names = FALSE, qmethod = c("escape", "double"))
-#write.table(indsInfo$name[indsInfo$hybrid_cat %in% c("Hybrid_E")], file = "GBS.admx.inds", append = FALSE, quote = FALSE, sep = "\t",  eol = "\n", na = "NA", dec = ".", row.names = FALSE,    col.names = FALSE, qmethod = c("escape", "double"))
-#write.table(indsInfo$name[indsInfo$hybrid_cat %in% c("XYY")], file = "GBS.XYY.inds", append = FALSE, quote = FALSE, sep = "\t",  eol = "\n", na = "NA", dec = ".", row.names = FALSE,    col.names = FALSE, qmethod = c("escape", "double"))
-
-
+##subset to relevant populations
 popSort <- as.data.frame(unique(indsInfo$statePop))
 names(popSort) <- c("pop")
 pop_pos_gen <- pop_pos[pop_pos$Name %in% popSort$pop]
@@ -140,15 +127,13 @@ pop_pos_gen$strc_popNum <- seq(1,45,1)
 pop_pos_gen <- pop_pos_gen[order(pop_pos_gen$mixName),]
 pop_pos_gen$constrc_popNum <- seq(1,45,1)
 
-indsInfo <- left_join(indsInfo,pop_pos_gen[,c(8,11,13:14)],by=c("statePop"="Name"))
+indsInfo <- left_join(indsInfo,pop_pos_gen[,c(8,11,12:13)],by=c("statePop"="Name"))
 
-pheno_pos <- fread('populations_Rumex_hastatulus.csv')
-
+##take in genotype info
 s012 <- fread(paste("GBS.mis60.maf",maf,".noY.012",sep=""),na.strings = "-1")
 s012 <- s012[,-1]
 
-#pos
-#GBS.mis60.maf01.012.chrom.pos
+#take in position info
 loc <- fread(paste("GBS.mis60.maf",maf,".noY.012.chrom.pos",sep=""))
 names(loc) <- c("scaffold","sPos","LG","lPos")
 
@@ -214,7 +199,7 @@ dev.off()
 
 
 #MLRA
-MLRA_shapes <- st_read("nrcs142p2_052440/mlra_v42.shp")
+MLRA_shapes <- st_read("data/MLRA/mlra_v42.shp")
 
 MLRA_shapes_SE = st_crop(MLRA_shapes, xmin=-100, xmax=-75, ymin=28, ymax=38)
 MLRA_shapes_SE_top5 <- MLRA_shapes_SE[MLRA_shapes_SE$LRRSYM %in% c("J","N","O","P","T"),]
@@ -286,8 +271,7 @@ ggplot(hybPCAcoord,aes(y=Dim.2*hybPCA$eig[2,2], x=Dim.1*hybPCA$eig[1,2],color=Lo
 cor.test(hybPCAcoord$Dim.1, hybPCAcoord$Longitude, method=c("pearson"))
 
 ####STRUCTURE####
-strcPop <- indsInfo[order(indsInfo$mixName),c(1,16)] #fread('HiC_hyb.pop.num')
-
+strcPop <- indsInfo[order(indsInfo$mixName),c(1,16)] 
 
 for (k in c(2:3)){
   kfileName <-  paste('K',k,'.ind.clumpp',sep='')
@@ -2078,19 +2062,20 @@ ggplot(data=bgc_bound,aes(x=var_median)) +
   )
   
   
-pdf(paste("fig5_beta.",today,".pdf",sep=''),width=5,height=4)
+pdf(paste("fig4_beta.",today,".pdf",sep=''),width=5,height=4)
 
 
 plot_grid(  
   
   ggplot() + 
-    geom_line(data=bgc_bound_beta,color="black",alpha=0.1,size=0.25,aes(x=mb,y=var_median)) +
+    geom_hline(yintercept=0, color = "black", linetype="dashed", size=0.2,alpha=0.25) +  
     
-    geom_point(data=bgc_bound_beta,alpha=0.1,color="white",aes(x=mb,y=var_median)) +
+    geom_line(data=bgc_bound_beta,color="gray",size=0.25,aes(x=mb,y=var_median)) +
+    
+   # geom_point(data=bgc_bound_beta,alpha=0.5,color="white",aes(x=mb,y=var_median)) +
   #  geom_point(data=bgc_bound_beta[!is.na(bgc_bound_beta$excess) ,],shape=4,aes(x=mb,y=var_median),color="gray") +
-    geom_point(data=bgc_bound_beta[!is.na(bgc_bound_beta$outlier) ,],size=0.5,color="black",shape=8,aes(x=mb,y=var_median)) +
+    geom_point(data=bgc_bound_beta[!is.na(bgc_bound_beta$outlier) ,],size=1,color="black",shape=8,aes(x=mb,y=var_median)) +
     
-    geom_hline(yintercept=0, color = "gray", size=1,alpha=0.25) +  
     facet_grid( . ~ chrom,scales = "free",space="free_x") + 
     theme_bw()  + theme_bw(base_size = 8) + 
     labs(x="Position (mb)",y=title_b) +
@@ -2105,7 +2090,7 @@ plot_grid(
     facet_grid(SNPpos~.,space="free",scale="free")+
     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
     labs(x="Longitude",y="Genotype",shape="Sex",color="Genotype") +  scale_shape_manual(values=c(16,1))
-  ,  labels = c('A', 'B'), label_size = 12,ncol = 1, align = 'vh',axis='tbrl',rel_heights = c(1,2))
+  ,  labels = c('A', 'B'), label_size = 12,ncol = 1, rel_heights = c(1.5,2))
 
 dev.off()
 
