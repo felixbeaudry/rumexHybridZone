@@ -319,8 +319,8 @@ strc_Pop$var_alt[strc_Pop$k == 3 & strc_Pop$variable == "k2" ] <- "TXl"
 strc_Pop$var_alt[strc_Pop$k == 3 & strc_Pop$variable == "k3" ] <- "TXh"
 strc_Pop$var_alt[strc_Pop$k == 3 & strc_Pop$variable == "k1" ] <- "NC"
 
-####Fig S3####
-pdf(paste("figS3_structure.",today,".pdf",sep=''),width=5.5,height=4)
+####Fig 2C####
+pdf(paste("fig2C_structure.",today,".pdf",sep=''),width=5.5,height=4)
 
 ggplot(strc_Pop,aes(x=inds,y=value_flip,fill=var_alt)) +
   geom_bar( stat="identity" ) +
@@ -2108,6 +2108,13 @@ ggplot(XY_PCAcoord,aes(y=Dim.1, x=Dim.2)) +
   theme_bw(base_size = 18) + 
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +  scale_shape_manual(values=c(3,5,4))
 
+ggplot(XY_PCAcoord,aes(y=Dim.1, x=Longitude)) + 
+  geom_point(size=3,alpha=1) + 
+  theme_bw(base_size = 18) + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +  scale_shape_manual(values=c(3,5,4))
+
+
+
 cor.test(XY_PCAcoord$Dim.1, XY_PCAcoord$Longitude, method=c("pearson"))
 
 
@@ -2135,11 +2142,10 @@ presvals <- raster::extract(predictors, ind_latlon)
 
 bioClimbyPop <- cbind.data.frame(indsInfo[indsInfo$riverside == "W",],presvals,XY_PCAcoord)
 
-M<-cor(bioClimbyPop[,c(8:9,14,18:41)])
+M<-cor(bioClimbyPop[,c(8:9,18:41)])
 corrplot(M, type="upper", order="hclust")
 
 
-cor.test(-bioClimbyPop$Dim.1, bioClimbyPop$elevation, method=c("pearson"))
 cor.test(bioClimbyPop$Dim.1, bioClimbyPop$Longitude, method=c("pearson"))
 
 
@@ -2151,9 +2157,10 @@ summary(XYPCA_elev_lm_collec)
 ####SNP associations####
 XYPCAloc <- cbind.data.frame(loc,XY_PCA$var$contrib)
 
+
 XYPCAloc$chrom = factor(XYPCAloc$LG, levels=c('A1','A2','A4','X','A3','U'))
 
-  ggplot(XYPCAloc[XYPCAloc$LG != "U" ,]) + 
+  ggplot(XYPCAlocO[XYPCAlocO$LG != "U" ,]) + 
   geom_point(aes(y=Dim.4,x=mb,alpha=Dim.4),color="#ffd700") + 
   geom_point(aes(y=Dim.3,x=mb,alpha=Dim.3),color="#fa8775") + 
   geom_point(aes(y=Dim.2,x=mb,alpha=Dim.2),color="#cd34b5") + 
@@ -2164,14 +2171,87 @@ XYPCAloc$chrom = factor(XYPCAloc$LG, levels=c('A1','A2','A4','X','A3','U'))
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
   labs(x="Position (mb)",y="PC1 eff.") +
   theme(strip.background =element_rect(fill="white"))  +
-  theme(panel.spacing = unit(0.1, "lines")) +
+  theme(panel.spacing = unit(0.1, "lines")) #+
   theme(axis.title.x=element_blank(), axis.text.x=element_blank())+ theme(axis.title.x = element_blank())
 
+####clustering by region####
+  XYPCAlocO <-   XYPCAloc[(XYPCAloc$mb > 145 & XYPCAloc$mb < 170 &  XYPCAloc$chrom == "A3") ,]
+  
+  diff_SNPS <- c(XYPCAlocO$SNP)
+  length(diff_SNPS)
+  
+  XY_PCA_snpsub <- PCA(s012[indsInfo$riverside == "W",..diff_SNPS], graph = FALSE) #missMDA assumes continuous variables
+  
+  XY_PCAcoord_snpsub <- cbind.data.frame(XY_PCA_snpsub$ind$coord,indsInfo[indsInfo$riverside == "W",-1]) %>%
+  
+    left_join(strc_Pop[strc_Pop$k == 3 & strc_Pop$variable == "k3",],by=c("name"="inds"))
+  
+    #ggplot(strc_Pop[strc_Pop$k == 3 & strc_Pop$variable == "k3",],aes(x=value)) + geom_density()
+  
+    library(mclust) #mclust::map function conflicts with tidyverse^
+    density_model <- densityMclust(XY_PCAcoord_snpsub$Dim.1)
+    summary(density_model)
+    m_model <- Mclust(XY_PCAcoord_snpsub$Dim.1)
+    summary(m_model)
+    
+    #plot the counts under the distributions
+    par(mfrow = c(2,1))
+    plot(density_model, what = "density", data = XY_PCAcoord_snpsub$Dim.1, breaks = 15)
+    plot(m_model, what="classification")
+    par(mfrow = c(1,1))
+    detach("package:mclust", unload=TRUE)
 
+    XY_PCAcoord_snpsub$mclusters <- m_model$classification  
+    
+  A3_PCA_plot <- 
+  ggplot(XY_PCAcoord_snpsub,aes(y=Dim.1, x=Dim.2,color=as.factor(mclusters))) + 
+    geom_point(size=3,alpha=1) + 
+    theme_bw(base_size = 18) + 
+    stat_ellipse(type = "norm") + coord_fixed() + labs(color="Cluster",title="A3 inversion") +
+     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +  scale_shape_manual(values=c(3,5,4))
+  
+  ##
+   XYPCAlocO <-   XYPCAloc[(XYPCAloc$mb > 5 & XYPCAloc$mb < 50 &  XYPCAloc$chrom == "A2") ,]
 
+  diff_SNPS <- c(XYPCAlocO$SNP)
+  length(diff_SNPS)
+  
+  XY_PCA_snpsub <- PCA(s012[indsInfo$riverside == "W",..diff_SNPS], graph = FALSE) #missMDA assumes continuous variables
+  
+  XY_PCAcoord_snpsub <- cbind.data.frame(XY_PCA_snpsub$ind$coord,indsInfo[indsInfo$riverside == "W",-1]) %>%
+    
+    left_join(strc_Pop[strc_Pop$k == 3 & strc_Pop$variable == "k3",],by=c("name"="inds"))
+  
+  #ggplot(strc_Pop[strc_Pop$k == 3 & strc_Pop$variable == "k3",],aes(x=value)) + geom_density()
+  
+  library(mclust) #mclust::map function conflicts with tidyverse^
+  density_model <- densityMclust(XY_PCAcoord_snpsub$Dim.1)
+  summary(density_model)
+  m_model <- Mclust(XY_PCAcoord_snpsub$Dim.1)
+  summary(m_model)
+  
+  #plot the counts under the distributions
+  par(mfrow = c(2,1))
+  plot(density_model, what = "density", data = XY_PCAcoord_snpsub$Dim.1, breaks = 15)
+  plot(m_model, what="classification")
+  par(mfrow = c(1,1))
+  detach("package:mclust", unload=TRUE)
+  
+  XY_PCAcoord_snpsub$mclusters <- m_model$classification  
+  
+  A2_PCA_plot <- 
+    
+  ggplot(XY_PCAcoord_snpsub,aes(y=Dim.1, x=Dim.2,color=as.factor(mclusters))) + 
+    geom_point(size=3,alpha=1) + 
+    theme_bw(base_size = 18) + 
+    stat_ellipse(type = "norm") + coord_fixed() + labs(color="Cluster",title="A2 inversions") +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +  scale_shape_manual(values=c(3,5,4))
+  
 
-
-####LD A2####
+ plot_grid(  A2_PCA_plot, A3_PCA_plot,  labels = c('A', 'B'), label_size = 12,ncol = 2, align = 'vh',axis='tbrl')
+  
+  
+  ####LD A2####
 #pos_conversion <- fread('GBS.mis60.maf01.012.chrom.pos')
 
 #ld <- fread('GBS.A2.XY.plink.ld')
